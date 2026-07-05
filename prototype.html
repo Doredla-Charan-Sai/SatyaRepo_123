@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Excel Analytics Dashboard — Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.9/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.9/plugin/customParseFormat.js"></script>
+  <script>dayjs.extend(window.dayjs_plugin_customParseFormat)</script>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <div class="max-w-7xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-semibold">Excel Analytics Dashboard — Prototype</h1>
+        <p class="text-sm text-gray-600">Interactive demo for executive pitch (static sample data).</p>
+      </div>
+      <div class="flex gap-2 items-center">
+        <button id="exportBtn" class="px-4 py-2 bg-blue-600 text-white rounded">Export CSV</button>
+        <button id="downloadExcel" class="px-4 py-2 bg-green-600 text-white rounded">Download .xlsx (styled)</button>
+      </div>
+    </header>
+
+    <!-- KPI cards -->
+    <div id="kpis" class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6"></div>
+
+    <!-- Filters -->
+    <div class="bg-white p-4 rounded shadow mb-6">
+      <div class="flex flex-wrap items-center gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Month Filter</label>
+          <div id="monthControls" class="mt-2"></div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Sort By</label>
+          <select id="sortBy" class="mt-2 rounded border px-3 py-1">
+            <option value="">(No Sort)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Order</label>
+          <select id="order" class="mt-2 rounded border px-3 py-1">
+            <option value="desc">Descending ↓</option>
+            <option value="asc">Ascending ↑</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex gap-2 mb-4" id="legend"></div>
+
+    <!-- Table -->
+    <div class="bg-white p-4 rounded shadow">
+      <table id="dataTable" class="display stripe" style="width:100%">
+        <thead>
+          <tr id="tableHeader"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <footer class="mt-6 text-sm text-gray-600">Notes: Prototype uses sample data. To use your file, open the Streamlit app version.</footer>
+  </div>
+
+<script>
+// Sample data derived to match the required columns.
+const SAMPLE_DATA = [
+  {"Rep Code":"R001","Rep Name":"Alice Smith","Rep Code Created Date":"03/15/2024","YTD Trade Amount":120000.50,"Asset Balance":450000.00},
+  {"Rep Code":"R002","Rep Name":"Bob Jones","Rep Code Created Date":"11/01/2023","YTD Trade Amount":75000.00,"Asset Balance":120000.00},
+  {"Rep Code":"R003","Rep Name":"Carol Lee","Rep Code Created Date":"01/10/2022","YTD Trade Amount":30000.00,"Asset Balance":80000.00},
+  {"Rep Code":"R004","Rep Name":"Dan Brown","Rep Code Created Date":"06/05/2021","YTD Trade Amount":5000.00,"Asset Balance":15000.00},
+  {"Rep Code":"R005","Rep Name":"Eve White","Rep Code Created Date":"12/20/2025","YTD Trade Amount":200000.00,"Asset Balance":900000.00},
+  {"Rep Code":"R006","Rep Name":"Frank Green","Rep Code Created Date":"02/28/2026","YTD Trade Amount":90000.00,"Asset Balance":300000.00}
+];
+
+const REQUIRED_COLUMNS = ["Rep Code","Rep Name","Rep Code Created Date","YTD Trade Amount","Asset Balance"];
+const COLOR_BANDS = [
+  {lo:0, hi:90, color:'#d4edda', label:'Recent'},
+  {lo:91, hi:180, color:'#fff3cd', label:'Moderate'},
+  {lo:181, hi:270, color:'#ffe5d0', label:'Aging'},
+  {lo:271, hi:360, color:'#f8d7da', label:'Old'},
+  {lo:361, hi:1000000, color:'#e2d9f3', label:'Very Old'}
+];
+
+function computeAgeDays(dateStr){
+  if(!dateStr) return NaN;
+  const d = dayjs(dateStr, ['MM/DD/YYYY','YYYY-MM-DD','M/D/YYYY'], true);
+  if(!d.isValid()) return NaN;
+  return dayjs().diff(d,'day');
+}
+
+function ageToBand(age){
+  if(isNaN(age)) return {color:'', label:'Invalid Date'};
+  for(const b of COLOR_BANDS){ if(age>=b.lo && age<=b.hi) return b; }
+  return {color:'', label:''};
+}
+
+// Build header
+const headerRow = document.getElementById('tableHeader');
+REQUIRED_COLUMNS.forEach(c=>{ const th=document.createElement('th'); th.textContent=c; headerRow.appendChild(th); });
+
+let table;
+function renderTable(data){
+  if(table) { table.destroy(); }
+  const tbody = document.getElementById('tableBody'); tbody.innerHTML='';
+  data.forEach((r, idx)=>{
+    const tr = document.createElement('tr');
+    const age = computeAgeDays(r['Rep Code Created Date']);
+    const band = ageToBand(age);
+    if(band.color) tr.style.backgroundColor = band.color;
+    REQUIRED_COLUMNS.forEach(col=>{
+      const td = document.createElement('td');
+      let v = r[col];
+      if(col==='YTD Trade Amount' || col==='Asset Balance'){
+        v = (typeof v==='number')? ('$'+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})):v;
+      }
+      if(col==='Rep Code Created Date'){
+        const dd = dayjs(v, ['MM/DD/YYYY','YYYY-MM-DD','M/D/YYYY'], true);
+        v = dd.isValid() ? dd.format('MMM DD, YYYY') : v;
+      }
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table = $('#dataTable').DataTable({
+    paging:true,
+    order:[],
+    destroy:true,
+    columnDefs:[{targets:[], orderable:true}]
+  });
+}
+
+function updateKPIs(filtered){
+  const container = document.getElementById('kpis'); container.innerHTML='';
+  const totalRecords = filtered.length;
+  const totalYtd = filtered.reduce((s,r)=>s + (Number(r['YTD Trade Amount'])||0),0);
+  const totalAsset = filtered.reduce((s,r)=>s + (Number(r['Asset Balance'])||0),0);
+  const dates = filtered.map(r=> dayjs(r['Rep Code Created Date'],'MM/DD/YYYY',true)).filter(d=>d.isValid());
+  const minD = dates.length? dayjs.min(dates).format('MMM DD, YYYY'):'—';
+  const maxD = dates.length? dayjs.max(dates).format('MMM DD, YYYY'):'—';
+  const cards = [
+    {title:'Total Records', value: totalRecords},
+    {title:'Total YTD Trade Amount', value: '$'+totalYtd.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})},
+    {title:'Total Asset Balance', value: '$'+totalAsset.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})},
+    {title:'Date Range', value: `${minD} → ${maxD}`}
+  ];
+  cards.forEach(c=>{
+    const el = document.createElement('div'); el.className='bg-white p-4 rounded shadow';
+    el.innerHTML = `<div class="text-sm text-gray-500">${c.title}</div><div class="text-xl font-semibold">${c.value}</div>`;
+    container.appendChild(el);
+  });
+}
+
+function buildMonthFilter(data){
+  const monthSet = new Set();
+  data.forEach(r=>{
+    const d = dayjs(r['Rep Code Created Date'],['MM/DD/YYYY','YYYY-MM-DD','M/D/YYYY'],true);
+    if(d.isValid()) monthSet.add(d.format('MMM YYYY'));
+  });
+  const months = Array.from(monthSet).sort((a,b)=> dayjs(a,'MMM YYYY').toDate() - dayjs(b,'MMM YYYY').toDate());
+  const controls = document.getElementById('monthControls'); controls.innerHTML='';
+  const selectAll = document.createElement('button'); selectAll.textContent='Select All'; selectAll.className='mr-2 px-3 py-1 rounded border';
+  const clearAll = document.createElement('button'); clearAll.textContent='Clear All'; clearAll.className='mr-2 px-3 py-1 rounded border';
+  controls.appendChild(selectAll); controls.appendChild(clearAll);
+  const box = document.createElement('div'); box.className='mt-2 flex gap-2 flex-wrap';
+  months.forEach(m=>{ const cb = document.createElement('label'); cb.className='inline-flex items-center gap-2'; cb.innerHTML=`<input type=checkbox value="${m}" checked class='monthChk'> <span>${m}</span>`; box.appendChild(cb); });
+  controls.appendChild(box);
+  selectAll.onclick = () => document.querySelectorAll('.monthChk').forEach(c=>c.checked=true);
+  clearAll.onclick = () => document.querySelectorAll('.monthChk').forEach(c=>c.checked=false);
+  document.querySelectorAll('.monthChk').forEach(c=>c.addEventListener('change', applyFilters));
+}
+
+function buildLegend(){
+  const el = document.getElementById('legend'); el.innerHTML='';
+  COLOR_BANDS.forEach(b=>{ const d = document.createElement('div'); d.className='px-3 py-2 rounded'; d.style.background=b.color; d.textContent=b.label; el.appendChild(d); });
+}
+
+function applyFilters(){
+  // month filter
+  const checked = Array.from(document.querySelectorAll('.monthChk:checked')).map(n=>n.value);
+  let filtered = SAMPLE_DATA.filter(r=>{
+    if(checked.length===0) return false;
+    const d = dayjs(r['Rep Code Created Date'], ['MM/DD/YYYY','YYYY-MM-DD','M/D/YYYY'], true);
+    if(!d.isValid()) return true; // include invalid dates (will show invalid label)
+    return checked.includes(d.format('MMM YYYY'));
+  });
+  // sorting
+  const sortBy = document.getElementById('sortBy').value;
+  const order = document.getElementById('order').value;
+  if(sortBy){
+    filtered.sort((a,b)=>{
+      const av = a[sortBy]; const bv = b[sortBy];
+      if(typeof av==='number' && typeof bv==='number') return (av-bv)*(order==='asc'?1:-1);
+      const ad = dayjs(av, ['MM/DD/YYYY','YYYY-MM-DD','M/D/YYYY'], true);
+      const bd = dayjs(bv, ['MM/DD/YYYY','YYYY-MM-DD','M/D/YYYY'], true);
+      if(ad.isValid() && bd.isValid()) return (ad - bd)*(order==='asc'?1:-1);
+      return String(av).localeCompare(String(bv))*(order==='asc'?1:-1);
+    });
+  }
+  updateKPIs(filtered);
+  renderTable(filtered);
+}
+
+function initSortOptions(data){
+  const sel = document.getElementById('sortBy'); sel.innerHTML = '<option value="">(No Sort)</option>';
+  Object.keys(data[0]).forEach(k=>{ const opt=document.createElement('option'); opt.value=k; opt.textContent=k; sel.appendChild(opt); });
+  sel.onchange = applyFilters; document.getElementById('order').onchange = applyFilters;
+}
+
+// Export CSV
+function exportCSV(data){
+  if(!data.length) return;
+  const headers = Object.keys(data[0]);
+  const rows = data.map(r=>headers.map(h=>`"${String(r[h]??'').replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'export.csv'; document.body.appendChild(a); a.click(); a.remove();
+}
+
+// Minimal XLSX export with styling using SheetJS + XLSXStyle (basic) is complex — we'll output a simple styled XLSX using xlsx-style via CDN if available.
+async function exportXLSX(data){
+  // Use SheetJS (xlsx) to build worksheet and add row fills for colors
+  const script = document.createElement('script'); script.src='https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js';
+  document.head.appendChild(script);
+  script.onload = ()=>{
+    const wb = XLSX.utils.book_new();
+    const ws_data = [Object.keys(data[0])];
+    data.forEach(r=> ws_data.push(Object.keys(r).map(k=>r[k])));
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    // apply fills per row based on age
+    for(let i=0;i<data.length;i++){
+      const age = computeAgeDays(data[i]['Rep Code Created Date']);
+      const band = ageToBand(age);
+      if(band.color){
+        const fill = { patternType: "solid", fgColor: { rgb: band.color.replace('#','').toUpperCase() } };
+        // apply to each column cell in that row (sheet rows are 1-based header)
+        for(let c=0;c<Object.keys(data[0]).length;c++){
+          const cellAddress = XLSX.utils.encode_cell({r:i+1,c});
+          if(!ws[cellAddress]) continue;
+          if(!ws[cellAddress].s) ws[cellAddress].s = {};
+          ws[cellAddress].s.fill = fill;
+        }
+      }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, 'Export');
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([wbout],{type:'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'export.xlsx'; document.body.appendChild(a); a.click(); a.remove();
+  };
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', ()=>{
+  buildLegend();
+  buildMonthFilter(SAMPLE_DATA);
+  initSortOptions(SAMPLE_DATA);
+  applyFilters();
+  document.getElementById('exportBtn').onclick = ()=>{
+    // export current filtered view from DataTable
+    const tableData = [];
+    $('#dataTable').DataTable().rows({search:'applied'}).every(function(rowIdx, tableLoop, rowLoop){
+      const d = this.data();
+      // DataTables returns array of cell strings; map back to object using headers
+      const obj = {};
+      const headers = REQUIRED_COLUMNS;
+      headers.forEach((h,i)=> obj[h] = d[i]);
+      tableData.push(obj);
+    });
+    exportCSV(tableData.length?tableData:SAMPLE_DATA);
+  };
+  document.getElementById('downloadExcel').onclick = ()=>{
+    // export currently filtered DataTable rows as xlsx with color fills
+    const rows = [];
+    $('#dataTable').DataTable().rows({search:'applied'}).every(function(){ rows.push(this.data()); });
+    const headers = REQUIRED_COLUMNS;
+    const objs = (rows.length?rows:SAMPLE_DATA.map(r=>headers.map(h=>r[h]))).map(r=>{
+      if(Array.isArray(r)){
+        const o = {}; headers.forEach((h,i)=> o[h]=r[i]); return o;
+      } else return r;
+    });
+    exportXLSX(objs);
+  };
+});
+</script>
+</body>
+</html>

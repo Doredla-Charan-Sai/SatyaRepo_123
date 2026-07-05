@@ -1,0 +1,175 @@
+I have attached an excel where that excel columns start from the B column, and always i will get the similar excel on the same start cell and the column names would be same always, now i want to build the dashboard on top of the excel, but in the UI i need the option to upload the excel, after upload you have to run the validation on the column names whether the column names are wrong then in the UI revert back to user that column names are not matching with the base format, if the column names are matching the below are the insights that i want to view in the UI:
+
+1. Month wise filtering of the data in the UI - as a table format
+column to be referred is Rep Code Created Date - by default all the months or dates needs to selected
+2. Another table view of data:
+2.1 based on the year-month filtered i need all the columns with asking the user which column needs to be sorted 
+now user will select the sorting column based on the selected sorted column data needs to be sorted either asc or desc
+example: there are two columns in the excel as YTD Trade Amount, Asset Balance columns in dollars if user selects these the data needs to be sorted according to the asc or desc
+2.2 now there is a date column as `Rep Code Created Date` based on the date column i need to color code the excel records, the threshold for each color will be 90 days, meaning for each 90 days set maintain the single color.
+
+
+
+Excel Analytics Dashboard — Full Product Requirements Prompt
+
+🧩 Project Overview
+Build a web-based analytics dashboard that allows users to upload an Excel file and view interactive data insights. The application should validate the uploaded file, display filtered/sorted tabular data, and apply visual color coding based on date thresholds.
+
+
+📁 Excel File Specification
+Data always starts from column B (column A is empty)
+Data always starts from Row 1 as headers
+The following columns are always present (exact names must match):
+
+Column Name	Data Type
+
+Rep Code	String
+
+Rep Name	String
+
+Rep Code Created Date	Date (MM/DD/YYYY)
+
+YTD Trade Amount	Currency (USD)
+
+Asset Balance	Currency (USD)
+
+(add remaining columns here)	
+
+
+
+🛠️ Tech Stack Preference
+Frontend: React.js with Tailwind CSS (or specify your preference)
+File Parsing: SheetJS (xlsx library)
+Charts (if needed): Recharts or Chart.js
+State Management: React useState/useContext or Redux
+Backend: None (fully client-side) (or Node.js/Python if needed)
+
+
+✅ Feature 1 — File Upload & Validation
+
+Upload UI:
+Provide a drag-and-drop file upload zone with a fallback "Browse File" button
+Accept only .xlsx and .xls file formats
+Show a loading spinner while the file is being parsed
+
+Validation Rules:
+After upload, parse the Excel file starting from Row 1, Column B
+Extract the header row and compare against the predefined column list (case-insensitive, trimmed)
+If validation fails:
+Display a clear error modal/banner listing:
+✅ Columns that matched
+❌ Columns that are missing or misnamed
+Do not proceed to the dashboard
+Allow the user to re-upload
+If validation passes:
+Show a success toast notification
+Automatically navigate to the dashboard view
+
+
+✅ Feature 2 — Month-Wise Filter (Table View 1)
+
+Reference Column: Rep Code Created Date
+
+Filter UI:
+Display a multi-select dropdown or checkbox group listing all unique Year-Month values (e.g., Jan 2024, Feb 2024) derived from Rep Code Created Date
+Default state: All months are selected (show all records)
+Add a "Select All" / "Clear All" toggle button
+Filter updates the table in real-time without page reload
+
+Table Display:
+Show all Excel columns in a paginated, scrollable table
+Display row count of filtered results (e.g., "Showing 45 of 120 records")
+Format currency columns (YTD Trade Amount, Asset Balance) with $ and comma separators
+Format date columns in a readable format (MMM DD, YYYY)
+
+
+✅ Feature 3 — Sortable Table with Color Coding (Table View 2)
+
+3.1 — Column Sorting
+
+Display a dropdown labeled "Sort By" listing all numeric and date columns as options
+Once a column is selected, show a toggle button for Ascending ↑ / Descending ↓ order
+Apply sorting on top of the active month filter (filters and sorting work together)
+Highlight the currently sorted column header with a visual indicator (arrow icon)
+Default: No sorting applied (original data order)
+
+Sortable Columns should include at minimum:
+YTD Trade Amount
+Asset Balance
+Rep Code Created Date
+(any other numeric columns)
+
+
+3.2 — Date-Based Color Coding
+
+Reference Column: Rep Code Created Date
+
+Logic:
+Calculate the age in days of each record based on Rep Code Created Date vs. today's date
+Assign a row background color based on 90-day bands:
+
+Age Range (Days)	Color	Label
+
+0 – 90 days	🟢 Green (#d4edda)	Recent
+
+91 – 180 days	🟡 Yellow (#fff3cd)	Moderate
+
+181 – 270 days	🟠 Orange (#ffe5d0)	Aging
+
+271 – 360 days	🔴 Red (#f8d7da)	Old
+
+360+ days	🟣 Purple (#e2d9f3)	Very Old
+
+
+Add a color legend above or below the table explaining each band
+Color coding should persist even when sorting or filtering is applied
+
+
+✅ Feature 4 — Dashboard Summary Cards (Recommended Addition)
+
+Above the tables, display KPI summary cards showing:
+📊 Total Records (filtered count)
+💰 Total YTD Trade Amount (sum of filtered data)
+💼 Total Asset Balance (sum of filtered data)
+📅 Date Range (min date → max date of filtered data)
+
+Cards should update dynamically when month filters change.
+
+
+✅ Feature 5 — Export Functionality (Recommended Addition)
+
+Provide a "Export to Excel" button that downloads the currently filtered + sorted data as a .xlsx file
+Preserve color coding in the exported file if possible
+
+
+🎨 UI/UX Requirements
+Responsive design (desktop-first, mobile-friendly)
+Clean, professional look using a light theme with a sidebar or top navigation
+Use sticky headers on tables for long scrolling
+Show empty state UI when no records match the filter
+All tables should support horizontal scrolling for many columns
+
+
+⚠️ Error Handling
+Scenario	Expected Behavior
+
+Wrong file type uploaded	Show error: "Only .xlsx/.xls files are supported"
+
+Column names don't match	Show mismatch details, block dashboard load
+
+Empty Excel file	Show error: "No data found in the uploaded file"
+
+Date column has invalid dates	Skip color coding for that row, show warning icon
+
+File too large (>10MB)	Show warning and ask for confirmation
+
+💡 Key Improvements Made
+
+Area	Original	Enhanced
+Column Schema	Vague	Explicit table with types
+Validation Feedback	Basic	Shows matched vs. missing columns
+Color Coding	1 color rule	5-band color system with legend
+Sorting UX	Unclear	Dropdown + toggle button flow
+Extra Features	None	KPI cards + Export added
+Error Handling	1 scenario	5 scenarios covered
+Tech Stack	Not mentioned	Fully specified
